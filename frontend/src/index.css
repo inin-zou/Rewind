@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 25% 5%;
+    --foreground: 210 40% 95%;
+
+    --card: 230 20% 8%;
+    --card-foreground: 210 40% 95%;
+
+    --popover: 230 20% 8%;
+    --popover-foreground: 210 40% 95%;
+
+    --primary: 185 80% 55%;
+    --primary-foreground: 230 25% 5%;
+
+    --secondary: 230 15% 15%;
+    --secondary-foreground: 210 40% 90%;
+
+    --muted: 230 15% 12%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 270 60% 60%;
+    --accent-foreground: 210 40% 95%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 230 15% 18%;
+    --input: 230 15% 18%;
+    --ring: 185 80% 55%;
+
+    --radius: 0.75rem;
+
+    --glow-primary: 185 80% 55%;
+    --glow-accent: 270 60% 60%;
+
+    --sidebar-background: 230 20% 8%;
+    --sidebar-foreground: 210 40% 95%;
+    --sidebar-primary: 185 80% 55%;
+    --sidebar-primary-foreground: 230 25% 5%;
+    --sidebar-accent: 230 15% 15%;
+    --sidebar-accent-foreground: 210 40% 95%;
+    --sidebar-border: 230 15% 18%;
+    --sidebar-ring: 185 80% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer utilities {
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(185 80% 55% / 0.3),
+                0 0 60px hsl(185 80% 55% / 0.1);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(270 60% 60% / 0.3),
+                0 0 60px hsl(270 60% 60% / 0.1);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 30px hsl(185 80% 55% / 0.5),
+                 0 0 60px hsl(185 80% 55% / 0.2);
+  }
+
+  .glass {
+    background: hsl(230 20% 8% / 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(230 15% 18% / 0.5);
+  }
+
+  .glass-strong {
+    background: hsl(230 20% 8% / 0.85);
+    backdrop-filter: blur(30px);
+    border: 1px solid hsl(230 15% 25% / 0.5);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
