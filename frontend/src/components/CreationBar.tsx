@@ -1,9 +1,11 @@
 import { useState, useRef, type DragEvent, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import { Sparkles, Upload, Image as ImageIcon, X } from "lucide-react";
 
-export default function CreationBar() {
-  const navigate = useNavigate();
+interface CreationBarProps {
+  onCreateStart?: () => void;
+}
+
+export default function CreationBar({ onCreateStart }: CreationBarProps) {
   const [prompt, setPrompt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -40,10 +42,10 @@ export default function CreationBar() {
 
     setIsGenerating(true);
 
-    // Demo: simulate generation then redirect
-    setTimeout(() => {
-      navigate("/demo");
-    }, 2000);
+    // Trigger the parent's zoom-out animation
+    if (onCreateStart) {
+      onCreateStart();
+    }
   };
 
   return (
