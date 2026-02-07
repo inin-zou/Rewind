@@ -1,0 +1,217 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 25% 5%;
+    --foreground: 210 40% 95%;
+
+    --card: 230 20% 8%;
+    --card-foreground: 210 40% 95%;
+
+    --popover: 230 20% 8%;
+    --popover-foreground: 210 40% 95%;
+
+    --primary: 185 80% 55%;
+    --primary-foreground: 230 25% 5%;
+
+    --secondary: 230 15% 15%;
+    --secondary-foreground: 210 40% 90%;
+
+    --muted: 230 15% 12%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 270 60% 60%;
+    --accent-foreground: 210 40% 95%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 230 15% 18%;
+    --input: 230 15% 18%;
+    --ring: 185 80% 55%;
+
+    --radius: 0.75rem;
+
+    --glow-primary: 185 80% 55%;
+    --glow-accent: 270 60% 60%;
+
+    --sidebar-background: 230 20% 8%;
+    --sidebar-foreground: 210 40% 95%;
+    --sidebar-primary: 185 80% 55%;
+    --sidebar-primary-foreground: 230 25% 5%;
+    --sidebar-accent: 230 15% 15%;
+    --sidebar-accent-foreground: 210 40% 95%;
+    --sidebar-border: 230 15% 18%;
+    --sidebar-ring: 185 80% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer utilities {
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(185 80% 55% / 0.3),
+                0 0 60px hsl(185 80% 55% / 0.1);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(270 60% 60% / 0.3),
+                0 0 60px hsl(270 60% 60% / 0.1);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 30px hsl(185 80% 55% / 0.5),
+                 0 0 60px hsl(185 80% 55% / 0.2);
+  }
+
+  .glass {
+    background: hsl(230 20% 8% / 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(230 15% 18% / 0.5);
+  }
+
+  .glass-strong {
+    background: hsl(230 20% 8% / 0.85);
+    backdrop-filter: blur(30px);
+    border: 1px solid hsl(230 15% 25% / 0.5);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes zoom-out-reality {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in-overlay {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Eye Opening Animation - POV waking up */
+@keyframes eye-open-upper {
+  0% {
+    transform: translateY(0) scaleY(1);
+    opacity: 0.98;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  40% {
+    transform: translateY(-20vh) scaleY(0.9);
+    opacity: 0.85;
+  }
+  70% {
+    transform: translateY(-45vh) scaleY(0.6);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-60vh) scaleY(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes eye-open-lower {
+  0% {
+    transform: translateY(0) scaleY(1);
+    opacity: 0.98;
+  }
+  10% {
+    opacity: 0.96;
+  }
+  35% {
+    transform: translateY(18vh) scaleY(0.92);
+    opacity: 0.88;
+  }
+  65% {
+    transform: translateY(42vh) scaleY(0.65);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(60vh) scaleY(0.35);
+    opacity: 0;
+  }
+}
+
+@keyframes world-focus {
+  0% {
+    filter: blur(15px) brightness(0.4);
+    transform: scale(1.05);
+  }
+  50% {
+    filter: blur(5px) brightness(0.7);
+  }
+  100% {
+    filter: blur(0) brightness(1);
+    transform: scale(1);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.animate-zoom-out {
+  animation: zoom-out-reality 3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-eye-open-upper {
+  animation: eye-open-upper 4s cubic-bezier(0.32, 0.08, 0.24, 1) forwards;
+}
+
+.animate-eye-open-lower {
+  animation: eye-open-lower 4.2s cubic-bezier(0.34, 0.06, 0.22, 1) forwards;
+}
+
+.animate-world-focus {
+  animation: world-focus 4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

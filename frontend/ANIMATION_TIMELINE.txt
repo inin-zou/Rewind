@@ -1,0 +1,147 @@
+WORLD CREATION ANIMATION TIMELINE
+=====================================
+
+User Action: Clicks "Create" button
+↓
+
+┌─────────────────────────────────────────────────────────────────┐
+│ PHASE 1: ZOOM-OUT (0s - 3s)                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  0.0s  ▶ User clicks "Create"                                   │
+│        ▶ Button changes to "Generating…"                        │
+│        ▶ isCreating state = true                                │
+│                                                                  │
+│  0.0s  ▶ Main container begins zoom-out                         │
+│        ▶ scale: 1.0 → 0.3                                       │
+│        ▶ opacity: 1.0 → 0.0                                     │
+│        ▶ duration: 3000ms                                       │
+│        ▶ easing: ease-out                                       │
+│                                                                  │
+│  0.0s  ▶ Dark overlay starts fading in                          │
+│        ▶ bg-background/95                                       │
+│        ▶ opacity: 0 → 1                                         │
+│                                                                  │
+│  Visual Effect:                                                  │
+│    ┌──────────┐        ┌────┐          ·                       │
+│    │ ●  ●  ● │   →   │ ● │    →    (gone)                   │
+│    │  ●   ●  │        │ ●│                                     │
+│    └──────────┘        └────┘                                   │
+│    InfiniteMenu       Shrinking      Disappeared               │
+│                                                                  │
+│  3.0s  ▶ Zoom-out completes                                     │
+│        ▶ Page content invisible                                 │
+│        ▶ Dark background fills screen                           │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ PHASE 2: HYPERSPEED (3s - 8s)                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  3.0s  ▶ Hyperspeed 3D animation fades in (1s fade-in)         │
+│        ▶ WebGL canvas takes full screen                         │
+│        ▶ Three.js scene initializes                             │
+│        ▶ Camera positioned above highway                        │
+│                                                                  │
+│  Visual State:                                                   │
+│                                                                  │
+│     ═══════════════════════════════════════                     │
+│     ║  ●  ●  ●     HIGHWAY      ●  ●  ●  ║                     │
+│     ║                                     ║                     │
+│     ║  ◉              →→→              ◉  ║  ← Neon lights     │
+│     ║                                     ║     streaming       │
+│     ║  ◉     Turbulent motion     ◉  ║                     │
+│     ║         distortion               ║                     │
+│     ║  ◉                              ◉  ║                     │
+│     ═══════════════════════════════════════                     │
+│                                                                  │
+│  3s-8s ▶ Hyperspeed animation plays                             │
+│        ▶ Car lights (purple/cyan) stream past                   │
+│        ▶ Roadside light sticks glow and move                    │
+│        ▶ Camera rocks with turbulent distortion                 │
+│        ▶ Bloom effect on all lights                             │
+│        ▶ Creates sensation of traveling through spacetime       │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│ PHASE 3: NAVIGATION (8s+)                                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  8.0s  ▶ onTransitionEnd() callback fires                       │
+│        ▶ Pick random world from worlds array                    │
+│        ▶ navigate(randomWorld.link)                             │
+│        ▶ React Router navigates to world page                   │
+│                                                                  │
+│  8.0s+ ▶ New world page loads                                   │
+│        ▶ User experiences their created world                   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+KEY VISUAL MOMENTS:
+===================
+
+ 0s    "You're here, present in the menu"
+ ↓
+ 1s    "Reality is pulling away..."
+ ↓
+ 2s    "The bubbles fade into the distance..."
+ ↓
+ 3s    "Complete darkness. You enter the void."
+ ↓
+ 3s    "🚀 HYPERSPEED ENGAGED"
+ ↓
+ 4s    "Traveling through spacetime..."
+ ↓
+ 5s    "Neon lights blur past..."
+ ↓
+ 6s    "The tunnel of creation..."
+ ↓
+ 7s    "Reality reconstructing..."
+ ↓
+ 8s    "✨ Your world materializes."
+
+
+COMPONENT RESPONSIBILITIES:
+===========================
+
+CreationBar.tsx
+  └─ Detects click → calls onCreateStart()
+  └─ Shows "Generating…" state
+
+Index.tsx
+  └─ Receives onCreateStart() → sets isCreating
+  └─ Applies zoom-out classes to main container
+  └─ Renders WorldCreationTransition component
+
+WorldCreationTransition.tsx
+  └─ Manages transition phases
+  └─ Shows dark overlay during zoom
+  └─ Shows loading UI after zoom
+  └─ Calls onTransitionEnd() → triggers navigation
+
+index.css
+  └─ Defines zoom-out keyframes
+  └─ pulse-glow animation for loader
+  └─ Smooth easing functions
+
+
+CUSTOMIZATION POINTS:
+=====================
+
+Want to adjust timing?
+  → WorldCreationTransition.tsx: Change setTimeout durations
+  → Index.tsx: Change duration-[3000ms] class
+
+Want different easing?
+  → Index.tsx: Change ease-out to custom cubic-bezier
+
+Want different scale/opacity?
+  → Index.tsx: Change scale-[0.3] and opacity-0 values
+
+Want different loading text?
+  → WorldCreationTransition.tsx: Update text content
+
+Want specific world instead of random?
+  → Index.tsx handleTransitionEnd: Change selection logic
