@@ -16,7 +16,7 @@ const Index = () => {
   const handleTransitionEnd = useCallback(() => {
     // Pick a random world to redirect to
     const randomWorld = worlds[Math.floor(Math.random() * worlds.length)];
-    navigate(randomWorld.link);
+    navigate(randomWorld.link, { state: { fromCreation: true } });
   }, [navigate]);
 
   return (

@@ -1,0 +1,177 @@
+WORLD ARRIVAL ANIMATION - VISUAL TIMELINE
+==========================================
+
+COMPLETE JOURNEY: 0s → 17s
+══════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 1: ZOOM OUT (0s - 10s)                                │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│     ┌───────────┐                                           │
+│     │  ●  ●  ● │         ┌─────┐              ·            │
+│     │   ●   ●  │    →    │ ● ● │      →     (gone)        │
+│     │  ●  ●  ● │         └─────┘                           │
+│     └───────────┘                                           │
+│     Bubbles            Shrinking          Disappeared       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 2: HYPERSPEED (1s - 14s)                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│     ═══════════════════════════════════════                 │
+│     ║  ●  ●  ●     HIGHWAY      ●  ●  ●  ║                 │
+│     ║  ◉              →→→              ◉  ║                 │
+│     ║                                     ║                 │
+│     ║     Traveling through spacetime     ║                 │
+│     ═══════════════════════════════════════                 │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 3: ✨ ARRIVAL EMERGENCE (14s - 17s) ✨               │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  14.0s  ▶ Navigation triggered                              │
+│         ▶ Hyperspeed still visible                          │
+│                                                              │
+│  14.0s  ▶ World page starts loading                         │
+│         ▶ EMERGENCE ANIMATION BEGINS                        │
+│                                                              │
+│  Stage 1: HEAVY BLUR (14.0s - 14.5s)                       │
+│  ─────────────────────────────────────                      │
+│                                                              │
+│         ████████████████████████████                        │
+│         ████████████████████████████                        │
+│         ████  [blurred world]  ████  ← blur: 20px          │
+│         ████████████████████████████  ← scale: 85%         │
+│         ████████████████████████████  ← opacity: 0         │
+│                                                              │
+│         "Can't see anything yet..."                         │
+│                                                              │
+│  Stage 2: COMING INTO FOCUS (14.5s - 15.5s)               │
+│  ─────────────────────────────────────                      │
+│                                                              │
+│         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                        │
+│         ▓▓▓▓  [getting clearer] ▓▓▓  ← blur: 10px          │
+│         ▓▓▓▓   World shapes    ▓▓▓▓  ← scale: 90%          │
+│         ▓▓▓▓   emerging...     ▓▓▓▓  ← opacity: 0.5        │
+│         ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓                        │
+│                                                              │
+│         "Something's forming..."                            │
+│                                                              │
+│  Stage 3: SHARP & SETTLING (15.5s - 16.5s)                │
+│  ─────────────────────────────────────                      │
+│                                                              │
+│         ┌───────────────────────────┐                       │
+│         │   ╔═══════════════════╗   │                       │
+│         │   ║   [WORLD IMAGE]   ║   │  ← blur: 2px         │
+│         │   ║                   ║   │  ← scale: 97%        │
+│         │   ║   Getting sharp   ║   │  ← opacity: 0.8      │
+│         │   ╚═══════════════════╝   │                       │
+│         └───────────────────────────┘                       │
+│                                                              │
+│         "It's a memory world!"                              │
+│                                                              │
+│  Stage 4: FULLY MATERIALIZED (16.5s - 17s)                │
+│  ─────────────────────────────────────                      │
+│                                                              │
+│         ┌──────────────── Back ─────┐                       │
+│         │   ╔═══════════════════╗   │                       │
+│         │   ║                   ║   │  ← blur: 0           │
+│         │   ║   [WORLD IMAGE]   ║   │  ← scale: 100%       │
+│         │   ║                   ║   │  ← opacity: 1.0      │
+│         │   ║   ⚫ Celestial    ║   │                       │
+│         │   ║      Drift        ║   │                       │
+│         │   ║                   ║   │  ↑ Content rises     │
+│         │   ║  [Enter World] ↗  ║   │    with 0.3s delay   │
+│         │   ╚═══════════════════╝   │                       │
+│         └───────────────────────────┘                       │
+│                                                              │
+│         "Crystal clear. Ready to explore."                  │
+│                                                              │
+│  17.0s  ▶ All animations complete                           │
+│         ▶ User can interact                                 │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+
+ANIMATION LAYERS (running simultaneously)
+══════════════════════════════════════════
+
+Layer 1: BACKGROUND (2.5s duration)
+─────────────────────────────────────
+        blur 20px ████████████▓▓▓▓▓▓░░░░ blur 0px
+       scale 85% ████████████▓▓▓▓▓▓░░░░ scale 100%
+     opacity 0.0 ████████████▓▓▓▓▓▓░░░░ opacity 1.0
+                14.0s                    16.5s
+
+Layer 2: CONTAINER (3.0s duration)
+─────────────────────────────────────
+        blur 10px ████████████████▓▓▓▓░░ blur 0px
+       scale 92% ████████████████▓▓▓▓░░ scale 100%
+     translateY 20px ████████████▓▓░░ translateY 0
+                14.0s                    17.0s
+
+Layer 3: CONTENT (2.0s duration, 0.3s delay)
+─────────────────────────────────────
+      [waiting]  blur 5px ████████▓▓░░ blur 0px
+                translateY 30px ████▓▓░░ translateY 0
+               opacity 0.0 ██████▓▓░░ opacity 1.0
+                14.0s  14.3s           16.3s
+
+
+KEY VISUAL MOMENTS
+══════════════════════════════════════════
+
+14.0s   "Tunnel ends..."
+        ↓
+14.2s   "Something's forming in the blur..."
+        ↓
+14.8s   "I can make out shapes..."
+        ↓
+15.5s   "It's getting clearer..."
+        ↓
+16.0s   "Almost there..."
+        ↓
+16.5s   "World is sharp!"
+        ↓
+17.0s   "✨ Fully arrived. Ready to explore."
+
+
+TECHNICAL SPECS
+══════════════════════════════════════════
+
+Easing: cubic-bezier(0.16, 1, 0.3, 1)
+        └─ Soft ease-out with elastic quality
+
+Blur range:   20px → 0px
+Scale range:  85% → 100%
+Opacity:      0 → 1
+Movement:     20-30px upward drift
+
+Performance:  60 FPS target
+              Hardware accelerated (transform + opacity)
+              Brief blur usage (expensive but impactful)
+
+
+EMOTIONAL ARC
+══════════════════════════════════════════
+
+Traveling (0-14s):
+  "Where am I going?"
+  Excitement, anticipation
+
+Arriving (14-15s):
+  "Something's happening..."
+  Curiosity, focus sharpening
+
+Materializing (15-16.5s):
+  "It's becoming real..."
+  Wonder, recognition
+
+Landed (16.5-17s):
+  "I'm here. This is the memory."
+  Comfort, presence, readiness
