@@ -2,21 +2,35 @@
 
 ## Overview
 
-The backend orchestrates a **chunk-based world exploration** experience. A user uploads a photo, the system generates a short video chunk showing camera movement through the scene, and the user navigates with WASD + joystick to generate subsequent chunks. Each chunk's last frame seeds the next generation, creating an unlimited explorable experience.
+The backend orchestrates a **streaming chunk-based world exploration** experience. A user uploads a photo, the system generates short video chunks (13 frames each) showing camera movement through the scene, and streams them to the frontend in real-time. Each chunk's last frame seeds the next generation, creating an unlimited explorable experience.
+
+The key insight from WorldPlay's design: **don't generate long videos — generate one chunk at a time and stream.**
 
 ---
 
-## Constraints (WorldPlay)
+## Performance Benchmarks (2x A100-80GB, torch.compile + SageAttention)
 
-| Parameter | Value |
-|-----------|-------|
-| Video chunk length | ~5.2s (125 frames @ 24fps) |
-| Generation time (warm) | 2–5 minutes per chunk |
-| Generation time (cold start) | +3–5 minutes first request |
-| GPU | A100-80GB, 1 concurrent request per container |
-| Output resolution | 480p (SR disabled) |
+| Frames | Latents | Duration (24fps) | Inference Time | Notes |
+|--------|---------|-------------------|----------------|-------|
+| 13 | 4 (1 chunk) | 0.54s | **4.2s** | Streaming target |
+| 61 | 16 (4 chunks) | 2.5s | **23.0s** | Medium batch |
+| 125 | 32 (8 chunks) | 5.2s | 67-71s | Full batch (old approach) |
 
-**Key implication:** This is **not real-time**. The experience is turn-based — the user watches a chunk, chooses a direction, waits for the next chunk.
+First request on a fresh container has ~110s torch.compile warmup. After that, compiled cache is hot and times above apply.
+
+---
+
+## Why Chunked Streaming Works (WorldPlay Design)
+
+WorldPlay achieves low latency through three mechanisms:
+
+1. **Next-chunk prediction (13 frames):** Instead of generating a full 5s video, the model predicts only the next short chunk. This keeps compute cost fixed and TTFV (time-to-first-video) low.
+
+2. **Few-step distillation (4 steps):** The AR distilled model compresses diffusion sampling from 30 to 4 steps using Context Forcing, matching the bidirectional teacher's quality.
+
+3. **Memory/context forcing:** Maintains long-range consistency across chunks despite few-step generation, preventing drift that would otherwise compound over many chunks.
+
+**For our product:** TTFV is ~4.2s. The user sees the first chunk within 4 seconds of pressing a direction, then every ~4 seconds they get another 0.54s of video.
 
 ---
 
@@ -25,33 +39,95 @@ The backend orchestrates a **chunk-based world exploration** experience. A user 
 ```
 1. User uploads a photo
 2. Backend runs scene analysis (Claude) + first video chunk (Modal) + soundscape (ElevenLabs) in parallel
-3. User watches the first 5s chunk with ambient audio
-4. User controls direction via WASD (movement) + joystick (camera angle)
-5. Backend extracts LAST FRAME of previous chunk as new input image
-6. Backend generates next chunk with the user's chosen pose
-7. Repeat 4–6 indefinitely
+3. User sees the first 0.54s chunk + ambient audio within ~5s
+4. User holds a direction (WASD) or moves joystick
+5. Backend streams chunks continuously:
+   - Extract last frame from previous chunk → input for next chunk
+   - Generate next 13-frame chunk with user's current pose
+   - Push chunk to frontend via WebSocket/SSE
+   - Repeat while user holds direction
+6. User releases input → generation stops
+7. User presses new direction → new stream of chunks begins
 ```
 
 ---
 
-## Experience Duration
+## Streaming Protocol
 
-Technically **unlimited** — each chunk's last frame becomes the next chunk's input. But with 2–5 min generation per 5s of video, the pacing is slow. Strategies to improve:
+### WebSocket: `/ws/memories/{memory_id}/explore`
 
-| Strategy | How | Tradeoff |
-|----------|-----|----------|
-| **Pre-generate branches** | While user watches chunk N, generate 2–4 possible next directions in parallel | Higher GPU cost (2–4x) |
-| **Shorter chunks** | Fewer frames (e.g. 61 frames = ~2.5s) → faster generation | Choppier experience |
-| **Buffer ahead** | Always stay 1–2 chunks ahead of the user | Requires predicting user direction |
-| **Fewer inference steps** | Reduce `num_inference_steps` from 30 to 15–20 | Lower visual quality |
+Bidirectional WebSocket for real-time chunk streaming.
+
+**Client → Server messages:**
+
+```json
+// Start/continue generating chunks in a direction
+{ "action": "move", "pose": "w-3" }
+
+// Stop generating
+{ "action": "stop" }
+
+// Change direction mid-stream
+{ "action": "move", "pose": "a-3, right-1" }
+```
+
+**Server → Client messages:**
+
+```json
+// Chunk ready
+{
+  "type": "chunk",
+  "chunk_id": "uuid",
+  "chunk_index": 5,
+  "video_base64": "<base64 MP4, 13 frames>",
+  "generation_time_seconds": 4.2,
+  "pose": "w-3"
+}
+
+// Generation status
+{ "type": "status", "message": "generating", "chunk_index": 6 }
+
+// Error
+{ "type": "error", "message": "Worker crashed" }
+```
+
+**Frontend playback strategy:**
+- Buffer chunks in a queue
+- Play each chunk (0.54s) seamlessly after the previous one
+- Request next chunk as soon as current one starts playing (pipeline ahead)
+- With ~4s generation per 0.54s of video, there's an ~8:1 ratio — user watches 0.54s, waits ~3.5s for next
+
+### Fallback: SSE `/api/memories/{memory_id}/stream`
+
+For clients that can't use WebSocket (e.g. mobile browsers):
+
+```
+POST /api/memories/{memory_id}/stream
+Content-Type: application/json
+
+{ "pose": "w-3", "num_chunks": 5 }
+```
+
+Returns Server-Sent Events:
+
+```
+event: chunk
+data: {"chunk_id":"uuid","chunk_index":0,"video_base64":"...","generation_time_seconds":4.2}
+
+event: chunk
+data: {"chunk_id":"uuid","chunk_index":1,"video_base64":"...","generation_time_seconds":4.1}
+
+event: done
+data: {"total_chunks":5,"total_time_seconds":21.5}
+```
 
 ---
 
-## API Design
+## REST API (Non-Streaming)
 
 ### `POST /api/memories` — Start a new memory
 
-Creates a new memory session from an uploaded photo. Runs scene analysis, generates the first video chunk, and produces the soundscape.
+Creates a new memory session from an uploaded photo. Runs scene analysis, generates the first video chunk (13 frames), and produces the soundscape.
 
 **Request:**
 ```json
@@ -67,9 +143,10 @@ Creates a new memory session from an uploaded photo. Runs scene analysis, genera
   "memory_id": "uuid",
   "chunk": {
     "chunk_id": "uuid",
-    "video_base64": "<base64 MP4>",
-    "pose": "w-31",
-    "chunk_index": 0
+    "video_base64": "<base64 MP4, 13 frames>",
+    "pose": "w-3",
+    "chunk_index": 0,
+    "generation_time_seconds": 4.2
   },
   "audio_base64": "<base64 ambient audio>",
   "scene": {
@@ -84,14 +161,14 @@ Creates a new memory session from an uploaded photo. Runs scene analysis, genera
 }
 ```
 
-### `POST /api/memories/{memory_id}/chunks` — Generate next chunk
+### `POST /api/memories/{memory_id}/chunks` — Generate a single chunk
 
-Takes the user's chosen direction and generates the next video chunk. The backend automatically extracts the last frame from the previous chunk as the input image.
+For non-streaming clients. Generates one 13-frame chunk.
 
 **Request:**
 ```json
 {
-  "pose": "a-15, right-2",
+  "pose": "a-3, right-1",
   "parent_chunk_id": "uuid"
 }
 ```
@@ -101,9 +178,10 @@ Takes the user's chosen direction and generates the next video chunk. The backen
 {
   "chunk": {
     "chunk_id": "uuid",
-    "video_base64": "<base64 MP4>",
-    "pose": "a-15, right-2",
-    "chunk_index": 3
+    "video_base64": "<base64 MP4, 13 frames>",
+    "pose": "a-3, right-1",
+    "chunk_index": 3,
+    "generation_time_seconds": 4.2
   }
 }
 ```
@@ -112,25 +190,12 @@ Takes the user's chosen direction and generates the next video chunk. The backen
 
 Retrieve a memory and its full chunk tree for replaying a session.
 
-**Response:**
-```json
-{
-  "memory_id": "uuid",
-  "original_image_url": "https://...",
-  "scene": { ... },
-  "chunks": [
-    { "chunk_id": "uuid", "parent_chunk_id": null, "pose": "w-31", "chunk_index": 0, "video_url": "https://..." },
-    { "chunk_id": "uuid", "parent_chunk_id": "uuid", "pose": "a-15", "chunk_index": 1, "video_url": "https://..." }
-  ]
-}
-```
-
 ### `GET /api/health` — Health check
 
 ```json
 {
   "status": "healthy",
-  "modal": { "status": "healthy", "pipeline_loaded": true },
+  "modal": { "status": "healthy", "pipeline_loaded": true, "workers_alive": true },
   "supabase": "connected"
 }
 ```
@@ -139,21 +204,21 @@ Retrieve a memory and its full chunk tree for replaying a session.
 
 ## Pose Mapping (Frontend → Backend)
 
-The frontend sends WASD keys + joystick angle. The backend converts these into a WorldPlay pose string.
+With 13-frame chunks (4 latent frames), the pose step count is **3** (latent_num - 1 = 4 - 1 = 3). The worker auto-adjusts pose duration to match the frame count.
 
 | Frontend Input | Pose String | Description |
 |----------------|-------------|-------------|
-| W key | `w-31` | Walk forward |
-| S key | `s-31` | Walk backward |
-| A key | `a-31` | Strafe left |
-| D key | `d-31` | Strafe right |
+| W key | `w-3` | Walk forward (1 chunk) |
+| S key | `s-3` | Walk backward |
+| A key | `a-3` | Strafe left |
+| D key | `d-3` | Strafe right |
 | Joystick up | `up-N` | Pitch camera up |
 | Joystick down | `down-N` | Pitch camera down |
 | Joystick left | `left-N` | Yaw camera left |
 | Joystick right | `right-N` | Yaw camera right |
-| W + joystick right | `w-20, right-10` | Walk forward while turning right |
+| W + joystick right | `w-2, right-1` | Walk forward while turning right |
 
-The step count (N) maps to how far the camera moves across the chunk's latent frames. Default is 31 for a full chunk of movement. Combined inputs produce comma-separated pose strings.
+For longer chunks (e.g. 61 frames = 16 latents), step count would be 15. The backend auto-adjusts.
 
 ---
 
@@ -181,9 +246,11 @@ The step count (N) maps to how far the camera moves across the chunk's latent fr
 | `memory_id` | uuid (FK → memories) | Parent memory |
 | `parent_chunk_id` | uuid (FK → chunks, nullable) | Previous chunk (null for first) |
 | `chunk_index` | int | Order in the exploration path |
-| `pose` | text | Pose string used (e.g. `"w-31"`) |
+| `pose` | text | Pose string used (e.g. `"w-3"`) |
+| `num_frames` | int | Frame count (default 13) |
 | `video_path` | text | Path in Supabase Storage |
 | `last_frame_path` | text | Path in Supabase Storage (input for next chunk) |
+| `generation_time` | float | Seconds to generate |
 | `created_at` | timestamptz | Creation time |
 
 ### `sessions` table (optional, for replay)
@@ -201,7 +268,7 @@ The step count (N) maps to how far the camera moves across the chunk's latent fr
 | Bucket | Contents |
 |--------|----------|
 | `originals` | Uploaded photos |
-| `videos` | Generated MP4 chunks |
+| `videos` | Generated MP4 chunks (13 frames each) |
 | `frames` | Extracted last frames (PNG) for seeding next chunk |
 | `audio` | Generated soundscape files |
 
@@ -215,7 +282,7 @@ The step count (N) maps to how far the camera moves across the chunk's latent fr
 POST /api/memories { image_base64, prompt }
     │
     ├─── [parallel] Claude: analyze scene → SceneInfo
-    ├─── [parallel] Modal: generate video (pose="w-31") → video_base64
+    ├─── [parallel] Modal: generate 13-frame chunk (pose="w-3") → video_base64
     │
     │  (wait for scene analysis)
     │
@@ -227,23 +294,48 @@ POST /api/memories { image_base64, prompt }
     ├─── Upload to Supabase Storage: original image, video, last frame, audio
     ├─── Insert into Supabase: memories row + first chunks row
     │
-    └─── Return response
+    └─── Return response (~5s total)
 ```
 
-### Subsequent Chunks
+### Streaming Chunks (Exploration)
 
 ```
-POST /api/memories/{id}/chunks { pose, parent_chunk_id }
+WebSocket /ws/memories/{id}/explore
     │
-    ├─── Fetch parent chunk's last_frame from Supabase Storage
-    ├─── Modal: generate video (image=last_frame, pose=user_pose) → video_base64
+    │  Client: { "action": "move", "pose": "w-3" }
     │
-    ├─── Extract last frame from new video
-    ├─── Upload to Supabase Storage: video, last frame
-    ├─── Insert into Supabase: new chunks row
+    ├── Loop while user holds direction:
+    │   │
+    │   ├─── Fetch last frame from previous chunk (in-memory or Supabase)
+    │   ├─── Modal: generate 13-frame chunk (image=last_frame, pose=pose)
+    │   │    └── ~4.2s with warm torch.compile cache
+    │   ├─── Extract last frame from new chunk
+    │   ├─── Push chunk to client via WebSocket
+    │   ├─── Store chunk + last frame (async, non-blocking)
+    │   │
+    │   └── Continue if client still sending "move"
     │
-    └─── Return response
+    │  Client: { "action": "stop" }
+    │
+    └── Stop generating, keep connection open
 ```
+
+---
+
+## Latency Optimization Stack
+
+| Layer | Technique | Impact |
+|-------|-----------|--------|
+| Model | AR distilled (4 steps vs 30) | 7.5x fewer forward passes |
+| Model | torch.compile | ~2x kernel fusion speedup |
+| Model | SageAttention | Optimized attention kernels |
+| Architecture | Persistent worker daemon | No model reload per request (~200s saved) |
+| Architecture | No model offloading | No CPU↔GPU transfers (~2.7x speedup) |
+| Architecture | 13-frame chunks (not 125) | 8x less compute per request |
+| Infrastructure | `min_containers=1` | No cold start for first user |
+| Infrastructure | File-based IPC (not subprocess) | Persistent torchrun, model stays in VRAM |
+
+**Net result:** 250s → 4.2s per chunk (60x speedup)
 
 ---
 
@@ -251,9 +343,9 @@ POST /api/memories/{id}/chunks { pose, parent_chunk_id }
 
 | Component | Technology |
 |-----------|------------|
-| API server | FastAPI (Python) |
+| API server | FastAPI (Python) with WebSocket support |
 | Package manager | uv |
-| Video generation | HY-WorldPlay on Modal (A100-80GB) |
+| Video generation | HY-WorldPlay AR distilled on Modal (2x A100-80GB) |
 | Scene analysis | Claude (Anthropic API) |
 | Soundscape | ElevenLabs Sound Effects API |
 | Database | Supabase (PostgreSQL) |
@@ -262,9 +354,28 @@ POST /api/memories/{id}/chunks { pose, parent_chunk_id }
 
 ---
 
+## Modal Deployment Config
+
+| Parameter | Value |
+|-----------|-------|
+| App name | `hy-worldplay-ar` |
+| GPU | `A100-80GB:2` (sp=2 sequence parallelism) |
+| Model type | AR distilled (`model_type="ar"`, `few_step=True`) |
+| Inference steps | 4 |
+| Chunk size | 13 frames (4 latent frames, `chunk_latent_frames=4`) |
+| torch.compile | Enabled |
+| SageAttention | Enabled (graceful fallback) |
+| Offloading | Disabled (`None`) |
+| `min_containers` | 1 (always warm) |
+| `scaledown_window` | 900s (15 min) |
+| `max_inputs` | 1 (sequential generation) |
+| Container timeout | 3600s |
+
+---
+
 ## Frame Extraction
 
-To chain chunks, the backend must extract the last frame from each generated video. This is done server-side:
+To chain chunks, the backend extracts the last frame from each generated chunk:
 
 ```python
 import imageio
@@ -276,11 +387,10 @@ def extract_last_frame(video_bytes: bytes) -> bytes:
     for frame in reader:
         last_frame = frame
     reader.close()
-    # Encode as PNG
     img = Image.fromarray(last_frame)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
 ```
 
-This last frame PNG is stored in Supabase and used as `image_base64` for the next chunk's Modal call.
+This last frame PNG is stored in-memory for the next chunk (and optionally persisted to Supabase for session replay).
