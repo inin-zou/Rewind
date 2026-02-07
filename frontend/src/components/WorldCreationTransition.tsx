@@ -12,6 +12,7 @@ export default function WorldCreationTransition({
   onTransitionEnd,
 }: WorldCreationTransitionProps) {
   const [phase, setPhase] = useState<"idle" | "zooming" | "hyperspeed">("idle");
+  const [isMouseDown, setIsMouseDown] = useState(false);
 
   useEffect(() => {
     if (!isActive) {
@@ -38,6 +39,28 @@ export default function WorldCreationTransition({
     };
   }, [isActive, onTransitionEnd]);
 
+  // Track mouse/touch down state for text animation
+  useEffect(() => {
+    if (phase !== "hyperspeed") return;
+
+    const handleMouseDown = () => setIsMouseDown(true);
+    const handleMouseUp = () => setIsMouseDown(false);
+    const handleTouchStart = () => setIsMouseDown(true);
+    const handleTouchEnd = () => setIsMouseDown(false);
+
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("touchstart", handleTouchStart);
+    window.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [phase]);
+
   if (!isActive) return null;
 
   return (
@@ -53,9 +76,25 @@ export default function WorldCreationTransition({
 
       {/* Hyperspeed state - fades in very quickly for immediate feel */}
       {phase === "hyperspeed" && (
-        <div className="fixed inset-0 z-[101] animate-in fade-in duration-300">
-          <Hyperspeed effectOptions={hyperspeedPresets.one} />
-        </div>
+        <>
+          <div className="fixed inset-0 z-[101] animate-in fade-in duration-300">
+            <Hyperspeed effectOptions={hyperspeedPresets.one} />
+          </div>
+
+          {/* Interactive text overlay */}
+          <div
+            className="fixed inset-0 z-[102] pointer-events-none flex items-center justify-center"
+            style={{
+              transform: isMouseDown ? 'translateY(-40px)' : 'translateY(0)',
+              opacity: isMouseDown ? 0 : 1,
+              transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            <p className="text-xl font-medium text-foreground/90 text-glow">
+              Bringing back memories…
+            </p>
+          </div>
+        </>
       )}
     </>
   );
