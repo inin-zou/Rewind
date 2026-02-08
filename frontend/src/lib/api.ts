@@ -53,6 +53,66 @@ export async function generateSound(
   return response.json();
 }
 
+// --- Companion types ---
+
+export interface ConversationMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CompanionGreetResponse {
+  audio_base64: string;
+  text: string;
+}
+
+export interface CompanionChatResponse {
+  audio_base64: string;
+  text: string;
+  user_text: string;
+}
+
+// --- Companion API functions ---
+
+export async function companionGreet(
+  sceneContext: string
+): Promise<CompanionGreetResponse> {
+  const response = await fetch(`${API_BASE}/api/companion/greet`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scene_context: sceneContext }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function companionChat(
+  audioBase64: string,
+  conversationHistory: ConversationMessage[],
+  sceneContext: string
+): Promise<CompanionChatResponse> {
+  const response = await fetch(`${API_BASE}/api/companion/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      audio_base64: audioBase64,
+      conversation_history: conversationHistory,
+      scene_context: sceneContext,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 /**
  * Convert a File to base64.
  * Draws onto a canvas to strip EXIF rotation metadata.
