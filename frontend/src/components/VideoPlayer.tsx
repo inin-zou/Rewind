@@ -55,7 +55,6 @@ const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
       <video
         ref={videoRef}
         src={videoSrc}
-        loop
         muted
         playsInline
         className={`absolute inset-0 w-full h-full object-cover ${className}`}
