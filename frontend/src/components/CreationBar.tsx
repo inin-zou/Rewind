@@ -2,7 +2,7 @@ import { useState, useRef, type DragEvent, type ChangeEvent } from "react";
 import { Sparkles, Upload, Image as ImageIcon, X } from "lucide-react";
 
 interface CreationBarProps {
-  onCreateStart?: () => void;
+  onCreateStart?: (file: File | null, prompt: string) => void;
 }
 
 export default function CreationBar({ onCreateStart }: CreationBarProps) {
@@ -42,9 +42,9 @@ export default function CreationBar({ onCreateStart }: CreationBarProps) {
 
     setIsGenerating(true);
 
-    // Trigger the parent's zoom-out animation
+    // Pass file + prompt to parent (starts API call + animation)
     if (onCreateStart) {
-      onCreateStart();
+      onCreateStart(file, prompt);
     }
   };
 
