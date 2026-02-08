@@ -99,26 +99,32 @@ def _convert_to_16_9(image_base64: str, prompt: str) -> str:
 async def generate(req: GenerateRequest):
     """Proxy image to Nebius endpoint, return generated video."""
     try:
-        # Step 1: Only convert to 16:9 if the image isn't already 16:9
-        print(f"[generate] Checking aspect ratio...")
-        is_16_9 = _is_16_9(req.image_base64)
-        print(f"[generate] Already 16:9: {is_16_9}")
+        # Step 1: Skip 16:9 conversion for WASD navigation (captured frames are already 16:9)
+        is_wasd = req.pose.split("-")[0] in ("w", "a", "s", "d")
 
-        if is_16_9:
+        if is_wasd:
+            print(f"[generate] WASD pose '{req.pose}' — skipping 16:9 check")
             image_16_9_b64 = req.image_base64
         else:
-            print(f"[generate] Calling fal.ai nano-banana...")
-            image_url = await asyncio.to_thread(
-                _convert_to_16_9, req.image_base64, req.prompt
-            )
-            print(f"[generate] Got image URL: {image_url[:100]}...")
-            async with httpx.AsyncClient(timeout=120) as client:
-                img_resp = await client.get(image_url)
-                img_resp.raise_for_status()
-                image_16_9_b64 = base64.b64encode(img_resp.content).decode()
-            print(f"[generate] Downloaded converted image, b64 len={len(image_16_9_b64)}")
+            print(f"[generate] Checking aspect ratio...")
+            is_16_9 = _is_16_9(req.image_base64)
+            print(f"[generate] Already 16:9: {is_16_9}")
 
-        # Step 2: Send 16:9 image to Modal lingbot-world for video generation
+            if is_16_9:
+                image_16_9_b64 = req.image_base64
+            else:
+                print(f"[generate] Calling fal.ai nano-banana...")
+                image_url = await asyncio.to_thread(
+                    _convert_to_16_9, req.image_base64, req.prompt
+                )
+                print(f"[generate] Got image URL: {image_url[:100]}...")
+                async with httpx.AsyncClient(timeout=120) as client:
+                    img_resp = await client.get(image_url)
+                    img_resp.raise_for_status()
+                    image_16_9_b64 = base64.b64encode(img_resp.content).decode()
+                print(f"[generate] Downloaded converted image, b64 len={len(image_16_9_b64)}")
+
+        # Step 2: Send image to Nebius for video generation
         print(f"[generate] Sending to Nebius...")
         async with httpx.AsyncClient(timeout=600, follow_redirects=True) as client:
             response = await client.post(
@@ -126,9 +132,10 @@ async def generate(req: GenerateRequest):
                 json={
                     "prompt": req.prompt or "A scene",
                     "image_base64": image_16_9_b64,
-                    "num_frames": 17,
+                    "num_frames": 9,
                     "pose": req.pose,
-                    "sampling_steps": 40,
+                    "sampling_steps": 15,
+                    "guide_scale": 3.0,
                     "max_area": "720*1280",
                 },
             )
@@ -159,5 +166,5 @@ async def health():
 
     return {
         "status": "healthy",
-        "modal": nebius_status,
+        "nebius": nebius_status,
     }
