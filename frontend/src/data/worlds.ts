@@ -3,6 +3,7 @@ import world2Img from "@/assets/world-2.jpg";
 import world3Img from "@/assets/world-3.jpg";
 import world4Img from "@/assets/world-4.jpg";
 import world5Img from "@/assets/world-5.jpg";
+import world6Img from "@/assets/world-6.jpg";
 
 export interface World {
   id: string;
@@ -16,39 +17,46 @@ export interface World {
 export const worlds: World[] = [
   {
     id: "celestial-drift",
-    title: "Celestial Drift",
-    description: "A floating kingdom above the clouds",
+    title: "Colares, Dec 2024",
+    description: "A cherished memory",
     image: world1Img,
     link: "/world/celestial-drift",
     isDemo: true,
   },
   {
     id: "abyssal-palace",
-    title: "Abyssal Palace",
-    description: "Crystal halls beneath the deep ocean",
+    title: "Cologne, May 2005",
+    description: "A cherished memory",
     image: world2Img,
     link: "/world/abyssal-palace",
   },
   {
     id: "golden-shrine",
-    title: "Golden Shrine",
-    description: "Ancient temples bathed in sunset",
+    title: "Dolomites, Aug 2010",
+    description: "A cherished memory",
     image: world3Img,
     link: "/world/golden-shrine",
   },
   {
     id: "neon-district",
-    title: "Neon District",
-    description: "Cyberpunk city that never sleeps",
+    title: "Paris, Feb 2026",
+    description: "A cherished memory",
     image: world4Img,
     link: "/world/neon-district",
   },
   {
     id: "mycelium-grove",
-    title: "Mycelium Grove",
-    description: "Enchanted forest of glowing fungi",
+    title: "Paris, Feb 2026",
+    description: "A cherished memory",
     image: world5Img,
     link: "/world/mycelium-grove",
+  },
+  {
+    id: "memory-six",
+    title: "Colares, Dec 2024",
+    description: "A cherished memory",
+    image: world6Img,
+    link: "/world/memory-six",
   },
 ];
 
