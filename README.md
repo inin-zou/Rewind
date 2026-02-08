@@ -6,6 +6,19 @@
 
 Rewind is an immersive "memory revisiting" app. Upload a photo, and the system transforms that moment into a navigable 3D memory world with ambient soundscapes and a gentle AI companion that guides you to relive and reflect on the memory.
 
+## Demo
+
+### Alpine Village Memory
+https://github.com/inin-zou/Rewind/raw/main/demo_videos/demo_IMG_1161.mp4
+
+### Coastal Lighthouse Memory
+https://github.com/inin-zou/Rewind/raw/main/demo_videos/demo_IMG_6436.mp4
+
+### Office Space Memory
+https://github.com/inin-zou/Rewind/raw/main/demo_videos/demo_IMG_8251.mp4
+
+> Upload a photo, walk through it with WASD, hear the ambient sounds, and talk with an AI companion about your memory.
+
 ## How It Works
 
 1. **Upload a Memory** — Pick a photo and describe the moment.
