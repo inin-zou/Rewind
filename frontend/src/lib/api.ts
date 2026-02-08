@@ -16,7 +16,8 @@ export interface SoundResponse {
 export async function generateWorld(
   imageBase64: string,
   prompt: string,
-  pose: string = "w-3"
+  pose: string = "w-3",
+  skipConversion: boolean = false
 ): Promise<GenerateResponse> {
   const response = await fetch(`${API_BASE}/api/generate`, {
     method: "POST",
@@ -25,6 +26,7 @@ export async function generateWorld(
       image_base64: imageBase64,
       prompt,
       pose,
+      skip_conversion: skipConversion,
     }),
   });
 

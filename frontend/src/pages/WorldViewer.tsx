@@ -149,7 +149,8 @@ const WorldViewer = () => {
         const result = await generateWorld(
           frameBase64,
           generationResult?.prompt || "A scene",
-          pose
+          pose,
+          true // skip 16:9 conversion — captured frames are already 16:9
         );
         setGenerationResult(result);
       } catch (err: any) {

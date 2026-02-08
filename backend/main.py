@@ -71,6 +71,7 @@ class GenerateRequest(BaseModel):
     image_base64: str
     prompt: str = ""
     pose: str = "w-3"
+    skip_conversion: bool = False
 
 
 class GenerateResponse(BaseModel):
@@ -203,11 +204,9 @@ async def _gradium_stt(audio_base64: str) -> str:
 async def generate(req: GenerateRequest):
     """Proxy image to Modal AR endpoint, return generated video."""
     try:
-        # Step 1: Skip 16:9 conversion for WASD navigation (captured frames are already 16:9)
-        is_wasd = req.pose.split("-")[0] in ("w", "a", "s", "d")
-
-        if is_wasd:
-            print(f"[generate] WASD pose '{req.pose}' — skipping 16:9 check")
+        # Step 1: Skip 16:9 conversion if explicitly requested (WASD navigation frames are already 16:9)
+        if req.skip_conversion:
+            print(f"[generate] skip_conversion=True — skipping 16:9 check")
             image_16_9_b64 = req.image_base64
         else:
             print(f"[generate] Checking aspect ratio...")
