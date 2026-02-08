@@ -6,6 +6,7 @@ import traceback
 
 import fal_client
 import httpx
+from openai import OpenAI
 from dotenv import load_dotenv
 from PIL import Image
 from fastapi import FastAPI
@@ -28,10 +29,18 @@ fal_key = os.environ.get("FAL_AI_API_KEY", "")
 print(f"[startup] FAL_KEY loaded: {'yes' if fal_key else 'NO - MISSING'}  (len={len(fal_key)})")
 os.environ["FAL_KEY"] = fal_key
 
-# Nebius VM endpoint (8x H200)
-NEBIUS_BASE_URL = os.environ.get("NEBIUS_URL", "http://66.201.6.236:8888")
-NEBIUS_VIDEO_URL = f"{NEBIUS_BASE_URL}/generate"
-NEBIUS_HEALTH_URL = f"{NEBIUS_BASE_URL}/health"
+# OpenAI client
+openai_key = os.environ.get("OPENAI_API_KEY", "")
+print(f"[startup] OPENAI_KEY loaded: {'yes' if openai_key else 'NO - MISSING'}")
+openai_client = OpenAI(api_key=openai_key)
+
+# ElevenLabs API key
+elevenlabs_key = os.environ.get("ELEVENLABS_API_KEY", "")
+print(f"[startup] ELEVENLABS_KEY loaded: {'yes' if elevenlabs_key else 'NO - MISSING'}")
+
+# Modal lingbot-world endpoints
+MODAL_VIDEO_URL = "https://ykzou1214--lingbot-world-generate-video-api.modal.run"
+MODAL_HEALTH_URL = "https://ykzou1214--lingbot-world-health.modal.run"
 
 
 # --- Models ---
@@ -48,6 +57,15 @@ class GenerateResponse(BaseModel):
     num_frames: int
     pose: str
     generation_time_seconds: float
+
+
+class SoundRequest(BaseModel):
+    image_base64: str
+
+
+class SoundResponse(BaseModel):
+    audio_base64: str
+    sound_prompt: str
 
 
 # --- Helpers ---
@@ -97,7 +115,7 @@ def _convert_to_16_9(image_base64: str, prompt: str) -> str:
 
 @app.post("/api/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
-    """Proxy image to Nebius endpoint, return generated video."""
+    """Proxy image to Modal AR endpoint, return generated video."""
     try:
         # Step 1: Skip 16:9 conversion for WASD navigation (captured frames are already 16:9)
         is_wasd = req.pose.split("-")[0] in ("w", "a", "s", "d")
@@ -124,26 +142,25 @@ async def generate(req: GenerateRequest):
                     image_16_9_b64 = base64.b64encode(img_resp.content).decode()
                 print(f"[generate] Downloaded converted image, b64 len={len(image_16_9_b64)}")
 
-        # Step 2: Send image to Nebius for video generation
-        print(f"[generate] Sending to Nebius...")
+        # Step 2: Send 16:9 image to Modal lingbot-world for video generation
+        print(f"[generate] Sending to Modal...")
         async with httpx.AsyncClient(timeout=600, follow_redirects=True) as client:
             response = await client.post(
-                NEBIUS_VIDEO_URL,
+                MODAL_VIDEO_URL,
                 json={
                     "prompt": req.prompt or "A scene",
                     "image_base64": image_16_9_b64,
-                    "num_frames": 9,
+                    "num_frames": 17,
                     "pose": req.pose,
-                    "sampling_steps": 15,
-                    "guide_scale": 3.0,
+                    "sampling_steps": 40,
                     "max_area": "720*1280",
                 },
             )
-            print(f"[generate] Nebius response status: {response.status_code}")
+            print(f"[generate] Modal response status: {response.status_code}")
             result = response.json()
-            print(f"[generate] Nebius response keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+            print(f"[generate] Modal response keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
             if isinstance(result, dict) and "error" in result:
-                print(f"[generate] Nebius error: {result['error']}")
+                print(f"[generate] Modal error: {result['error']}")
                 from fastapi.responses import JSONResponse
                 return JSONResponse(status_code=500, content=result)
             return result
@@ -153,18 +170,84 @@ async def generate(req: GenerateRequest):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/api/generate-sound", response_model=SoundResponse)
+async def generate_sound(req: SoundRequest):
+    """Analyze image with OpenAI, then generate a looping sound effect via ElevenLabs."""
+    try:
+        # Step 1: Analyze image with OpenAI GPT-4o-mini
+        print("[sound] Analyzing image with OpenAI...")
+        vision_resp = await asyncio.to_thread(
+            lambda: openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a sound designer. Analyze the image and describe "
+                            "the ambient sound effects that would match this scene in "
+                            "1-2 sentences. Focus on environmental and atmospheric sounds. "
+                            "Be specific and vivid. Only output the sound description, nothing else."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{req.image_base64}",
+                                },
+                            },
+                        ],
+                    },
+                ],
+                max_tokens=150,
+            )
+        )
+        sound_prompt = vision_resp.choices[0].message.content.strip()
+        print(f"[sound] OpenAI sound prompt: {sound_prompt}")
+
+        # Step 2: Generate sound effect with ElevenLabs
+        print("[sound] Generating sound with ElevenLabs...")
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.elevenlabs.io/v1/sound-generation",
+                headers={
+                    "Content-Type": "application/json",
+                    "xi-api-key": elevenlabs_key,
+                },
+                json={
+                    "text": sound_prompt,
+                    "loop": True,
+                    "duration_seconds": 10,
+                    "model_id": "eleven_text_to_sound_v2",
+                },
+            )
+            resp.raise_for_status()
+            audio_bytes = resp.content
+            print(f"[sound] Got audio: {len(audio_bytes)} bytes")
+
+        audio_b64 = base64.b64encode(audio_bytes).decode()
+        return SoundResponse(audio_base64=audio_b64, sound_prompt=sound_prompt)
+
+    except Exception as e:
+        traceback.print_exc()
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.get("/api/health")
 async def health():
-    """Health check — pings Nebius endpoint."""
-    nebius_status = "unknown"
+    """Health check — pings Modal endpoint."""
+    modal_status = "unknown"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(NEBIUS_HEALTH_URL)
-            nebius_status = resp.json()
+            resp = await client.get(MODAL_HEALTH_URL)
+            modal_status = resp.json()
     except Exception as e:
-        nebius_status = {"error": str(e)}
+        modal_status = {"error": str(e)}
 
     return {
         "status": "healthy",
-        "nebius": nebius_status,
+        "modal": modal_status,
     }
