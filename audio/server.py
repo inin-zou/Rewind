@@ -3,55 +3,13 @@ import base64
 import json
 import logging
 import os
-from dataclasses import dataclass
 from typing import Any, AsyncIterator, Optional
 
 import gradium
 import websockets
-from dotenv import load_dotenv
 from openai import OpenAI
 
-
-@dataclass(frozen=True)
-class GatewayConfig:
-    gradium_api_key: str
-    openai_api_key: str
-    host: str
-    port: int
-    stt_model: str
-    stt_input_format: str
-    tts_model: str
-    tts_voice_id: str
-    tts_output_format: str
-    openai_model: str
-    openai_prompt: str
-
-
-def load_config() -> GatewayConfig:
-    load_dotenv()
-    gradium_api_key = os.getenv("GRADIUM_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not gradium_api_key:
-        raise RuntimeError("Missing GRADIUM_API_KEY")
-    if not openai_api_key:
-        raise RuntimeError("Missing OPENAI_API_KEY")
-
-    return GatewayConfig(
-        gradium_api_key=gradium_api_key,
-        openai_api_key=openai_api_key,
-        host=os.getenv("GATEWAY_HOST", "0.0.0.0"),
-        port=int(os.getenv("GATEWAY_PORT", "8765")),
-        stt_model=os.getenv("GRADIUM_STT_MODEL", "default"),
-        stt_input_format=os.getenv("GRADIUM_STT_INPUT_FORMAT", "pcm"),
-        tts_model=os.getenv("GRADIUM_TTS_MODEL", "default"),
-        tts_voice_id=os.getenv("GRADIUM_TTS_VOICE_ID", "YTpq7expH9539ERJ"),
-        tts_output_format=os.getenv("GRADIUM_TTS_OUTPUT_FORMAT", "pcm"),
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        openai_prompt=os.getenv(
-            "OPENAI_PROMPT",
-            "You're an AI therapist.",
-        ),
-    )
+from config import GatewayConfig, load_config
 
 
 class AudioQueue:
@@ -85,17 +43,39 @@ async def recv_start_message(ws: websockets.WebSocketServerProtocol) -> dict[str
     return msg
 
 
+def validate_start_message(start_msg: dict[str, Any], config: GatewayConfig) -> None:
+    sample_rate = start_msg.get("sample_rate")
+    channels = start_msg.get("channels")
+    input_format = start_msg.get("input_format")
+
+    if sample_rate is None or channels is None or input_format is None:
+        raise RuntimeError(
+            "Start message must include sample_rate, channels, and input_format for validation."
+        )
+
+    if sample_rate != 24000:
+        raise RuntimeError(f"Unsupported sample_rate {sample_rate}; expected 24000.")
+    if channels != 1:
+        raise RuntimeError(f"Unsupported channels {channels}; expected 1.")
+    if input_format != config.stt_input_format:
+        raise RuntimeError(
+            f"Unsupported input_format {input_format}; expected {config.stt_input_format}."
+        )
+
+
 async def send_json(ws: websockets.WebSocketServerProtocol, payload: dict[str, Any]) -> None:
     await ws.send(json.dumps(payload))
 
 
-async def receive_audio(
+async def receive_client_messages(
     ws: websockets.WebSocketServerProtocol,
     audio_queue: AudioQueue,
+    openai_client: OpenAI,
+    conversation_id: str,
 ) -> None:
     async for raw in ws:
         if isinstance(raw, bytes):
-            logging.debug("Received %d bytes of audio", len(raw))
+            logging.debug(f"Received {len(raw)} bytes of audio")
             await audio_queue.put(raw)
             continue
 
@@ -106,16 +86,14 @@ async def receive_audio(
             continue
 
         msg_type = msg.get("type")
-        if msg_type == "audio":
-            payload = msg.get("audio")
-            if not payload:
+        if msg_type == "image":
+            image_data = msg.get("image")
+            if not image_data:
+                await send_json(ws, {"type": "error", "message": "Missing image data"})
                 continue
-            try:
-                decoded = base64.b64decode(payload)
-                logging.debug("Received %d bytes of base64 audio", len(decoded))
-                await audio_queue.put(decoded)
-            except (TypeError, ValueError):
-                await send_json(ws, {"type": "error", "message": "Invalid base64 audio payload"})
+            logging.debug(f"Received {len(image_data)} chars of base64 image data")
+            # await add_image_item(openai_client, conversation_id, image_data)
+            await send_json(ws, {"type": "image_ack"})
         elif msg_type in {"end", "end_of_stream"}:
             break
         else:
@@ -140,6 +118,34 @@ def extract_text_message(message: Any) -> Optional[dict[str, Any]]:
     return None
 
 
+async def add_image_item(openai_client: OpenAI, conversation_id: str, image_data_url: str) -> None:
+    await asyncio.to_thread(
+        openai_client.conversations.items.create,
+        conversation_id=conversation_id,
+        items=[
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_image", "image_url": image_data_url}],
+            }
+        ],
+    )
+
+
+async def add_text_item(openai_client: OpenAI, conversation_id: str, text: str) -> None:
+    await asyncio.to_thread(
+        openai_client.conversations.items.create,
+        conversation_id=conversation_id,
+        items=[
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": text}],
+            }
+        ],
+    )
+
+
 async def run_stt(
     gradium_client: gradium.client.GradiumClient,
     audio_queue: AudioQueue,
@@ -149,7 +155,11 @@ async def run_stt(
 ) -> None:
     logging.info("Starting STT stream (model=%s format=%s)", config.stt_model, config.stt_input_format)
     stream = await gradium_client.stt_stream(
-        {"model_name": config.stt_model, "input_format": config.stt_input_format},
+        {
+            "model_name": config.stt_model,
+            "input_format": config.stt_input_format,
+            "json_config": {"language": config.stt_language},
+        },
         audio_queue.generator(),
     )
 
@@ -157,7 +167,7 @@ async def run_stt(
     last_update_id = 0
 
     async def flush_after_silence(update_id: int) -> None:
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.5)
         nonlocal last_text
         if update_id == last_update_id and last_text:
             logging.info("STT final (silence): %s", last_text)
@@ -179,7 +189,6 @@ async def run_stt(
                 last_text = text
                 last_update_id += 1
                 asyncio.create_task(flush_after_silence(last_update_id))
-                await send_json(ws, {"type": "stt_partial", "text": text})
         elif msg_type == "end_text":
             if last_text:
                 logging.info("STT final: %s", last_text)
@@ -202,18 +211,21 @@ async def run_stt(
     await final_texts.put(None)
 
 
-def transform_text_sync(openai_client: OpenAI, config: GatewayConfig, text: str) -> str:
+def transform_text_sync(
+    openai_client: OpenAI,
+    config: GatewayConfig,
+    conversation_id: str,
+    text: str,
+) -> str:
     response = openai_client.responses.create(
         model=config.openai_model,
+        instructions=config.openai_prompt,
+        conversation=conversation_id,
         input=[
-            {
-                "role": "system",
-                "content": [{"type": "input_text", "text": config.openai_prompt}],
-            },
             {
                 "role": "user",
                 "content": [{"type": "input_text", "text": text}],
-            },
+            }
         ],
         max_output_tokens=512,
         temperature=0.3,
@@ -266,6 +278,7 @@ async def run_transform_and_tts(
     final_texts: asyncio.Queue[Optional[str]],
     ws: websockets.WebSocketServerProtocol,
     config: GatewayConfig,
+    conversation_id: str,
 ) -> None:
     while True:
         text = await final_texts.get()
@@ -273,80 +286,109 @@ async def run_transform_and_tts(
             break
 
         logging.info("Transforming text (len=%d)", len(text))
-        transformed = await asyncio.to_thread(transform_text_sync, openai_client, config, text)
+        transformed = await asyncio.to_thread(
+            transform_text_sync,
+            openai_client,
+            config,
+            conversation_id,
+            text,
+        )
         logging.info("Transformed text (len=%d)", len(transformed))
         logging.info("Transformed text: %s", transformed)
         await send_json(ws, {"type": "text_final", "text": transformed})
         await run_tts(gradium_client, ws, config, transformed)
 
 
-async def handler(ws: websockets.WebSocketServerProtocol) -> None:
-    config = load_config()
-    gradium_client = gradium.client.GradiumClient(api_key=config.gradium_api_key)
-    openai_client = OpenAI(api_key=config.openai_api_key)
+class GatewayHandler:
+    def __init__(self, config: GatewayConfig) -> None:
+        self._config = config
+        self._gradium_client = gradium.client.GradiumClient(api_key=config.gradium_api_key)
+        self._openai_client = OpenAI(api_key=config.openai_api_key)
 
-    try:
-        start_msg = await recv_start_message(ws)
-    except Exception as exc:
-        await send_json(ws, {"type": "error", "message": str(exc)})
-        return
+    async def __call__(self, ws: websockets.WebSocketServerProtocol) -> None:
+        conversation_id = await self._create_conversation()
+        if not await self._prepare_session(ws):
+            return
 
-    logging.info("Client start message: %s", start_msg)
+        audio_queue = AudioQueue()
+        final_texts: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        await self._run_pipeline(ws, conversation_id, audio_queue, final_texts)
 
-    stt_format = start_msg.get("input_format") or start_msg.get("format") or config.stt_input_format
-    config = GatewayConfig(
-        gradium_api_key=config.gradium_api_key,
-        openai_api_key=config.openai_api_key,
-        host=config.host,
-        port=config.port,
-        stt_model=start_msg.get("stt_model", config.stt_model),
-        stt_input_format=stt_format,
-        tts_model=start_msg.get("tts_model", config.tts_model),
-        tts_voice_id=start_msg.get("voice_id", config.tts_voice_id),
-        tts_output_format=start_msg.get("output_format", config.tts_output_format),
-        openai_model=start_msg.get("openai_model", config.openai_model),
-        openai_prompt=start_msg.get("prompt", config.openai_prompt),
-    )
+    async def _create_conversation(self) -> str:
+        conversation = await asyncio.to_thread(self._openai_client.conversations.create)
+        conversation_id = conversation.id
+        logging.info("OpenAI conversation created: %s", conversation_id)
+        return conversation_id
 
-    await send_json(
-        ws,
-        {
-            "type": "ready",
-            "stt_input_format": config.stt_input_format,
-            "tts_output_format": config.tts_output_format,
-        },
-    )
+    async def _prepare_session(self, ws: websockets.WebSocketServerProtocol) -> bool:
+        try:
+            start_msg = await recv_start_message(ws)
+        except Exception as exc:
+            await send_json(ws, {"type": "error", "message": str(exc)})
+            return False
 
-    audio_queue = AudioQueue()
-    final_texts: asyncio.Queue[Optional[str]] = asyncio.Queue()
+        logging.info("Client start message: %s", start_msg)
+        try:
+            validate_start_message(start_msg, self._config)
+        except Exception as exc:
+            await send_json(ws, {"type": "error", "message": str(exc)})
+            return False
 
-    receive_task = asyncio.create_task(receive_audio(ws, audio_queue))
-    stt_task = asyncio.create_task(run_stt(gradium_client, audio_queue, final_texts, ws, config))
-    tts_task = asyncio.create_task(
-        run_transform_and_tts(openai_client, gradium_client, final_texts, ws, config)
-    )
+        await send_json(
+            ws,
+            {
+                "type": "ready",
+                "stt_input_format": self._config.stt_input_format,
+                "tts_output_format": self._config.tts_output_format,
+            },
+        )
+        return True
 
-    done, pending = await asyncio.wait(
-        {receive_task, stt_task, tts_task},
-        return_when=asyncio.FIRST_EXCEPTION,
-    )
+    async def _run_pipeline(
+        self,
+        ws: websockets.WebSocketServerProtocol,
+        conversation_id: str,
+        audio_queue: AudioQueue,
+        final_texts: asyncio.Queue[Optional[str]],
+    ) -> None:
+        receive_task = asyncio.create_task(
+            receive_client_messages(ws, audio_queue, self._openai_client, conversation_id)
+        )
 
-    for task in pending:
-        task.cancel()
+        stt_task = asyncio.create_task(
+            run_stt(self._gradium_client, audio_queue, final_texts, ws, self._config)
+        )
+        tts_task = asyncio.create_task(
+            run_transform_and_tts(
+                self._openai_client,
+                self._gradium_client,
+                final_texts,
+                ws,
+                self._config,
+                conversation_id,
+            )
+        )
 
-    for task in done:
-        if task.exception():
-            logging.exception("Gateway task failed", exc_info=task.exception())
+        done, pending = await asyncio.wait(
+            {receive_task}, #stt_task, tts_task},
+            return_when=asyncio.FIRST_EXCEPTION,
+        )
+
+        for task in pending:
+            task.cancel()
+
+        for task in done:
+            if task.exception():
+                logging.exception("Gateway task failed", exc_info=task.exception())
 
 
 async def main() -> None:
     config = load_config()
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(level=log_level)
-
+    # logging.basicConfig(level=config.log_level)
+    handler = GatewayHandler(config)
     async with websockets.serve(handler, config.host, config.port, max_size=None):
         logging.info("Gateway listening on ws://%s:%s", config.host, config.port)
-        await asyncio.Future()
+        await asyncio.Event().wait()
 
 
 if __name__ == "__main__":

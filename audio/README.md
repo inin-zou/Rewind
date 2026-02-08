@@ -13,11 +13,12 @@ Install deps (using your preferred tool, e.g. `uv` or `pip`), then set environme
   - `GATEWAY_PORT` (default `8765`)
   - `GRADIUM_STT_MODEL` (default `default`)
   - `GRADIUM_STT_INPUT_FORMAT` (default `pcm`)
+  - `GRADIUM_STT_LANGUAGE` (default `en`)
   - `GRADIUM_TTS_MODEL` (default `default`)
   - `GRADIUM_TTS_VOICE_ID` (default `YTpq7expH9539ERJ`)
   - `GRADIUM_TTS_OUTPUT_FORMAT` (default `pcm`)
   - `OPENAI_MODEL` (default `gpt-4o-mini`)
-  - `OPENAI_PROMPT` (default: rewrite/clean transcript)
+  - `OPENAI_PROMPT` (default: "You're an AI therapist.")
 
 ## Run
 
@@ -37,6 +38,8 @@ You can set `LOG_LEVEL=DEBUG` for detailed streaming logs.
 ```json
 {
   "type": "start",
+  "sample_rate": 24000,
+  "channels": 1,
   "input_format": "pcm",
   "output_format": "pcm",
   "voice_id": "YTpq7expH9539ERJ",
@@ -47,10 +50,12 @@ You can set `LOG_LEVEL=DEBUG` for detailed streaming logs.
 }
 ```
 
-- Binary audio frames (preferred), or JSON base64 audio:
+- Binary audio frames (required). Base64 audio is not supported.
+
+- Image input (base64 data URL):
 
 ```json
-{ "type": "audio", "audio": "<base64>" }
+{ "type": "image", "image": "data:image/png;base64,..." }
 ```
 
 - End stream:
@@ -96,6 +101,12 @@ You can set `LOG_LEVEL=DEBUG` for detailed streaming logs.
 { "type": "tts_end" }
 ```
 
+- Image ack:
+
+```json
+{ "type": "image_ack" }
+```
+
 - Errors:
 
 ```json
@@ -106,6 +117,7 @@ You can set `LOG_LEVEL=DEBUG` for detailed streaming logs.
 
 - `input_format` and `output_format` should match what your Gradium account supports.
 - This gateway forwards binary audio frames directly; ensure your client encodes audio in the expected format.
+- Images are added to the OpenAI conversation and persist for the full session until disconnect.
 
 ## Quick Tests
 

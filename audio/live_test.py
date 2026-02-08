@@ -1,9 +1,9 @@
 import asyncio
+import base64
 import json
 from typing import Optional
 
 import sounddevice as sd
-import numpy as np
 import websockets
 
 SAMPLE_RATE = 24000
@@ -13,6 +13,13 @@ DTYPE = "int16"
 
 OUTPUT_TTS = "tts_output_live.pcm"
 TTS_SAMPLE_RATE = 48000
+IMAGE_PATH = "image.png"
+
+
+def load_image_data_url(path: str) -> str:
+    with open(path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 def _mic_callback(indata, _frames, _time, status):
@@ -28,6 +35,8 @@ async def send_audio(ws: websockets.WebSocketClientProtocol, queue: asyncio.Queu
         chunk = await queue.get()
         if chunk is None:
             break
+        if not isinstance(chunk, (bytes, bytearray, memoryview)):
+            raise RuntimeError("Audio must be sent as binary frames, not base64.")
         await ws.send(chunk)
         sent += len(chunk)
         if sent % (BLOCK_SIZE * 2 * 50) == 0:
@@ -56,10 +65,17 @@ async def main() -> None:
             json.dumps(
                 {
                     "type": "start",
+                    "sample_rate": SAMPLE_RATE,
+                    "channels": CHANNELS,
                     "input_format": "pcm",
-                    "output_format": "pcm",
-                    "stt_model": "default",
-                    "tts_model": "default",
+                }
+            )
+        )
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "image",
+                    "image": load_image_data_url(IMAGE_PATH),
                 }
             )
         )
