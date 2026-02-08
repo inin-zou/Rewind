@@ -8,18 +8,10 @@ Rewind is an immersive "memory revisiting" app. Upload a photo, and the system t
 
 ## Demo
 
-<table>
-<tr>
-<td align="center"><b>Alpine Village</b></td>
-<td align="center"><b>Coastal Lighthouse</b></td>
-<td align="center"><b>Office Space</b></td>
-</tr>
-<tr>
-<td><video src="https://github.com/inin-zou/Rewind/raw/main/demo_videos/demo_IMG_1161.mp4" width="300" autoplay loop muted></video></td>
-<td><video src="https://github.com/inin-zou/Rewind/raw/main/demo_videos/demo_IMG_6436.mp4" width="300" autoplay loop muted></video></td>
-<td><video src="https://github.com/inin-zou/Rewind/raw/main/demo_videos/demo_IMG_8251.mp4" width="300" autoplay loop muted></video></td>
-</tr>
-</table>
+| Alpine Village | Coastal Lighthouse | Office Space |
+|---|---|---|
+| [![Alpine Village](demo_videos/thumbnails/demo_IMG_1161.jpg)](https://github.com/inin-zou/Rewind/blob/main/demo_videos/demo_IMG_1161.mp4) | [![Coastal Lighthouse](demo_videos/thumbnails/demo_IMG_6436.jpg)](https://github.com/inin-zou/Rewind/blob/main/demo_videos/demo_IMG_6436.mp4) | [![Office Space](demo_videos/thumbnails/demo_IMG_8251.jpg)](https://github.com/inin-zou/Rewind/blob/main/demo_videos/demo_IMG_8251.mp4) |
+| *Click to play* | *Click to play* | *Click to play* |
 
 > Upload a photo, walk through it with WASD, hear the ambient sounds, and talk with an AI companion about your memory.
 
