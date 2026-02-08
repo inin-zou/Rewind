@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import WorldMenu from "@/components/WorldMenu";
 import CreationBar from "@/components/CreationBar";
 import WorldCreationTransition from "@/components/WorldCreationTransition";
-import { generateWorld, fileToBase64 } from "@/lib/api";
-import { setPendingGeneration } from "@/lib/generationStore";
+import { generateWorld, generateSound, fileToBase64 } from "@/lib/api";
+import { setPendingGeneration, setPendingSoundGeneration } from "@/lib/generationStore";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -18,6 +18,9 @@ const Index = () => {
         const imageBase64 = await fileToBase64(file);
         const generationPromise = generateWorld(imageBase64, prompt);
         setPendingGeneration(generationPromise);
+
+        const soundPromise = generateSound(imageBase64);
+        setPendingSoundGeneration(soundPromise);
       }
     },
     []

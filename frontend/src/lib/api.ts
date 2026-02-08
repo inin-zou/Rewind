@@ -8,6 +8,11 @@ export interface GenerateResponse {
   generation_time_seconds: number;
 }
 
+export interface SoundResponse {
+  audio_base64: string;
+  sound_prompt: string;
+}
+
 export async function generateWorld(
   imageBase64: string,
   prompt: string,
@@ -21,6 +26,23 @@ export async function generateWorld(
       prompt,
       pose,
     }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function generateSound(
+  imageBase64: string
+): Promise<SoundResponse> {
+  const response = await fetch(`${API_BASE}/api/generate-sound`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_base64: imageBase64 }),
   });
 
   if (!response.ok) {

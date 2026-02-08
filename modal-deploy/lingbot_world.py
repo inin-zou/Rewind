@@ -317,7 +317,7 @@ if __name__ == "__main__":
     volumes={MODEL_DIR: model_volume},
     secrets=[modal.Secret.from_name("huggingface-secret")],
     scaledown_window=900,
-    min_containers=1,
+    min_containers=0,
 )
 @modal.concurrent(max_inputs=1)
 class LingBotWorld:

@@ -6,10 +6,12 @@ import type { VideoPlayerHandle } from "@/components/VideoPlayer";
 import {
   getPendingGeneration,
   getResolvedResult,
+  getPendingSoundGeneration,
+  getResolvedSoundResult,
   clearGeneration,
 } from "@/lib/generationStore";
 import { generateWorld } from "@/lib/api";
-import type { GenerateResponse } from "@/lib/api";
+import type { GenerateResponse, SoundResponse } from "@/lib/api";
 
 const POSE_MAP: Record<string, string> = {
   w: "w-3",
@@ -41,7 +43,49 @@ const WorldViewer = () => {
   const [showUI, setShowUI] = useState(false);
 
   const videoPlayerRef = useRef<VideoPlayerHandle>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const isGeneratingRef = useRef(false);
+
+  // Load sound result and play as looping background audio
+  useEffect(() => {
+    if (!isGenerated) return;
+
+    const playAudio = (result: SoundResponse) => {
+      const binary = atob(result.audio_base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "audio/mpeg" });
+      const url = URL.createObjectURL(blob);
+
+      const audio = new Audio(url);
+      audio.loop = true;
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
+      audioRef.current = audio;
+    };
+
+    const resolved = getResolvedSoundResult();
+    if (resolved) {
+      playAudio(resolved);
+    } else {
+      const pending = getPendingSoundGeneration();
+      if (pending) {
+        pending.then(playAudio).catch((err) => {
+          console.error("Sound generation failed:", err);
+        });
+      }
+    }
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+        audioRef.current = null;
+      }
+    };
+  }, [isGenerated]);
 
   // Load generation result for generated worlds
   useEffect(() => {
