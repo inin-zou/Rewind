@@ -52,7 +52,7 @@ Photo Upload
 
 | Component | Technology |
 |---|---|
-| **Frontend** | React + TypeScript + Vite + Tailwind CSS |
+| **Frontend** | React + TypeScript + Vite + Tailwind CSS (Lovable) |
 | **Backend** | FastAPI (Python) |
 | **3D World Generation** | LingBot-World (Wan2.2 i2v-A14B) on Modal (4x A100-80GB) |
 | **Image Preprocessing** | fal.ai nano-banana (aspect ratio conversion) |
