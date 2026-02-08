@@ -32,42 +32,21 @@ export async function generateWorld(
 }
 
 /**
- * Convert a File to base64, ensuring landscape orientation (16:9).
- * Draws the image onto a canvas to strip EXIF rotation and
- * rotates portrait images to landscape.
+ * Convert a File to base64.
+ * Draws onto a canvas to strip EXIF rotation metadata.
+ * Aspect ratio conversion is handled server-side by fal.ai nano-banana.
  */
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      let { width, height } = img;
-      let rotate = false;
-
-      // If portrait, rotate to landscape
-      if (height > width) {
-        rotate = true;
-      }
-
       const canvas = document.createElement("canvas");
-      if (rotate) {
-        canvas.width = height;
-        canvas.height = width;
-      } else {
-        canvas.width = width;
-        canvas.height = height;
-      }
+      canvas.width = img.width;
+      canvas.height = img.height;
 
       const ctx = canvas.getContext("2d")!;
-
-      if (rotate) {
-        // Rotate 90 degrees clockwise
-        ctx.translate(canvas.width, 0);
-        ctx.rotate(Math.PI / 2);
-      }
-
       ctx.drawImage(img, 0, 0);
 
-      // Export as JPEG (smaller than PNG for photos)
       const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
       const base64 = dataUrl.split(",")[1];
       resolve(base64);

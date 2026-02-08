@@ -28,9 +28,10 @@ fal_key = os.environ.get("FAL_AI_API_KEY", "")
 print(f"[startup] FAL_KEY loaded: {'yes' if fal_key else 'NO - MISSING'}  (len={len(fal_key)})")
 os.environ["FAL_KEY"] = fal_key
 
-# Modal lingbot-world endpoints
-MODAL_VIDEO_URL = "https://ykzou1214--lingbot-world-generate-video-api.modal.run"
-MODAL_HEALTH_URL = "https://ykzou1214--lingbot-world-health.modal.run"
+# Nebius VM endpoint (8x H200)
+NEBIUS_BASE_URL = os.environ.get("NEBIUS_URL", "http://66.201.6.236:8888")
+NEBIUS_VIDEO_URL = f"{NEBIUS_BASE_URL}/generate"
+NEBIUS_HEALTH_URL = f"{NEBIUS_BASE_URL}/health"
 
 
 # --- Models ---
@@ -59,11 +60,20 @@ def _is_16_9(image_base64: str) -> bool:
     return abs(ratio - 16 / 9) < 0.05
 
 
+def _on_queue_update(update):
+    if isinstance(update, fal_client.InProgress):
+        for log in update.logs:
+            print(f"[fal] {log['message']}")
+
+
 def _convert_to_16_9(image_base64: str, prompt: str) -> str:
     """Use fal.ai nano-banana to extend an image to 16:9 aspect ratio.
     Returns the resulting image URL.
     """
-    data_uri = f"data:image/png;base64,{image_base64}"
+    # Upload image to fal storage to get a real URL
+    image_bytes = base64.b64decode(image_base64)
+    uploaded_url = fal_client.upload(image_bytes, content_type="image/jpeg")
+    print(f"[fal] Uploaded image to: {uploaded_url}")
 
     result = fal_client.subscribe(
         "fal-ai/nano-banana/edit",
@@ -72,12 +82,13 @@ def _convert_to_16_9(image_base64: str, prompt: str) -> str:
             "num_images": 1,
             "aspect_ratio": "16:9",
             "output_format": "png",
-            "image_urls": [data_uri],
+            "image_urls": [uploaded_url],
         },
         with_logs=True,
-        on_queue_update=lambda update: None,
+        on_queue_update=_on_queue_update,
     )
 
+    print(f"[fal] Result: {result}")
     image_url = result["images"][0]["url"]
     return image_url
 
@@ -86,7 +97,7 @@ def _convert_to_16_9(image_base64: str, prompt: str) -> str:
 
 @app.post("/api/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
-    """Proxy image to Modal AR endpoint, return generated video."""
+    """Proxy image to Nebius endpoint, return generated video."""
     try:
         # Step 1: Only convert to 16:9 if the image isn't already 16:9
         print(f"[generate] Checking aspect ratio...")
@@ -108,10 +119,10 @@ async def generate(req: GenerateRequest):
             print(f"[generate] Downloaded converted image, b64 len={len(image_16_9_b64)}")
 
         # Step 2: Send 16:9 image to Modal lingbot-world for video generation
-        print(f"[generate] Sending to Modal...")
+        print(f"[generate] Sending to Nebius...")
         async with httpx.AsyncClient(timeout=600, follow_redirects=True) as client:
             response = await client.post(
-                MODAL_VIDEO_URL,
+                NEBIUS_VIDEO_URL,
                 json={
                     "prompt": req.prompt or "A scene",
                     "image_base64": image_16_9_b64,
@@ -121,11 +132,11 @@ async def generate(req: GenerateRequest):
                     "max_area": "720*1280",
                 },
             )
-            print(f"[generate] Modal response status: {response.status_code}")
+            print(f"[generate] Nebius response status: {response.status_code}")
             result = response.json()
-            print(f"[generate] Modal response keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+            print(f"[generate] Nebius response keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
             if isinstance(result, dict) and "error" in result:
-                print(f"[generate] Modal error: {result['error']}")
+                print(f"[generate] Nebius error: {result['error']}")
                 from fastapi.responses import JSONResponse
                 return JSONResponse(status_code=500, content=result)
             return result
@@ -137,16 +148,16 @@ async def generate(req: GenerateRequest):
 
 @app.get("/api/health")
 async def health():
-    """Health check — pings Modal endpoint."""
-    modal_status = "unknown"
+    """Health check — pings Nebius endpoint."""
+    nebius_status = "unknown"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(MODAL_HEALTH_URL)
-            modal_status = resp.json()
+            resp = await client.get(NEBIUS_HEALTH_URL)
+            nebius_status = resp.json()
     except Exception as e:
-        modal_status = {"error": str(e)}
+        nebius_status = {"error": str(e)}
 
     return {
         "status": "healthy",
-        "modal": modal_status,
+        "modal": nebius_status,
     }
