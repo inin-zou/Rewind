@@ -1,11 +1,13 @@
 import asyncio
 import base64
+import io
 import os
 import traceback
 
-import anthropic
+import fal_client
 import httpx
 from dotenv import load_dotenv
+from PIL import Image
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,8 +23,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODAL_VIDEO_URL = "https://ykzou1214--hy-worldplay-simple-generate-video-api.modal.run"
-MODAL_HEALTH_URL = "https://ykzou1214--hy-worldplay-simple-health.modal.run"
+# fal.ai API key
+fal_key = os.environ.get("FAL_AI_API_KEY", "")
+print(f"[startup] FAL_KEY loaded: {'yes' if fal_key else 'NO - MISSING'}  (len={len(fal_key)})")
+os.environ["FAL_KEY"] = fal_key
+
+# Modal lingbot-world endpoints
+MODAL_VIDEO_URL = "https://ykzou1214--lingbot-world-generate-video-api.modal.run"
+MODAL_HEALTH_URL = "https://ykzou1214--lingbot-world-health.modal.run"
 
 
 # --- Models ---
@@ -30,158 +38,97 @@ MODAL_HEALTH_URL = "https://ykzou1214--hy-worldplay-simple-health.modal.run"
 class GenerateRequest(BaseModel):
     image_base64: str
     prompt: str = ""
-
-
-class AnchorPoint(BaseModel):
-    label: str
-    x: float
-    y: float
-
-
-class SceneInfo(BaseModel):
-    description: str
-    mood: str
-    anchor_points: list[AnchorPoint]
-    sound_keywords: list[str]
+    pose: str = "w-3"
 
 
 class GenerateResponse(BaseModel):
     video_base64: str
-    audio_base64: str | None = None
-    scene: SceneInfo
+    prompt: str
+    num_frames: int
+    pose: str
+    generation_time_seconds: float
 
 
-# --- Services ---
+# --- Helpers ---
 
-async def analyze_scene(image_base64: str, prompt: str) -> SceneInfo:
-    """Use Claude to analyze the image and extract scene metadata."""
-    client = anthropic.AsyncAnthropic()
+def _is_16_9(image_base64: str) -> bool:
+    """Check if a base64-encoded image is already 16:9 (with small tolerance)."""
+    img = Image.open(io.BytesIO(base64.b64decode(image_base64)))
+    w, h = img.size
+    ratio = w / h
+    return abs(ratio - 16 / 9) < 0.05
 
-    # Detect media type from base64 header or default to jpeg
-    media_type = "image/jpeg"
-    if image_base64.startswith("/9j/"):
-        media_type = "image/jpeg"
-    elif image_base64.startswith("iVBOR"):
-        media_type = "image/png"
 
-    response = await client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_base64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": f"""Analyze this image for an immersive memory experience app. The user said: "{prompt}"
+def _convert_to_16_9(image_base64: str, prompt: str) -> str:
+    """Use fal.ai nano-banana to extend an image to 16:9 aspect ratio.
+    Returns the resulting image URL.
+    """
+    data_uri = f"data:image/png;base64,{image_base64}"
 
-Return a JSON object (no markdown, just raw JSON) with:
-{{
-  "description": "A vivid 1-2 sentence description of the scene",
-  "mood": "2-3 mood/emotion words, comma-separated",
-  "anchor_points": [
-    {{"label": "notable object or area", "x": 0.0-1.0, "y": 0.0-1.0}},
-    ...up to 4 anchor points
-  ],
-  "sound_keywords": ["keyword1", "keyword2", ...up to 5 ambient sound keywords for this scene]
-}}
-
-The anchor points should identify interesting objects/areas in the image with normalized coordinates. Sound keywords should describe ambient sounds that would exist in this environment (e.g. "ocean waves", "wind", "birds chirping", "crowd murmur").""",
-                    },
-                ],
-            }
-        ],
+    result = fal_client.subscribe(
+        "fal-ai/nano-banana/edit",
+        arguments={
+            "prompt": prompt or "extend the image to 16:9",
+            "num_images": 1,
+            "aspect_ratio": "16:9",
+            "output_format": "png",
+            "image_urls": [data_uri],
+        },
+        with_logs=True,
+        on_queue_update=lambda update: None,
     )
 
-    import json
-    raw = response.content[0].text.strip()
-    # Handle potential markdown wrapping
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    data = json.loads(raw)
-    return SceneInfo(**data)
-
-
-async def generate_video(image_base64: str, prompt: str) -> str:
-    """Call the Modal endpoint to generate a video from the image."""
-    async with httpx.AsyncClient(timeout=600) as client:
-        response = await client.post(
-            MODAL_VIDEO_URL,
-            json={
-                "prompt": prompt or "A scene",
-                "image_base64": image_base64,
-                "num_frames": 125,
-                "pose": "w-31",
-                "num_inference_steps": 30,
-            },
-        )
-        result = response.json()
-        if "error" in result:
-            raise RuntimeError(f"Video generation failed: {result['error']}")
-        return result["video_base64"]
-
-
-async def generate_soundscape(sound_keywords: list[str]) -> str | None:
-    """Use ElevenLabs to generate ambient audio from scene keywords."""
-    api_key = os.getenv("ELEVENLABS_API_KEY")
-    if not api_key:
-        return None
-
-    from elevenlabs.client import AsyncElevenLabs
-
-    client = AsyncElevenLabs(api_key=api_key)
-
-    sound_prompt = ", ".join(sound_keywords)
-
-    try:
-        audio_gen = await client.text_to_sound_effects.convert(
-            text=f"Ambient soundscape: {sound_prompt}. Continuous, immersive, no music.",
-            duration_seconds=15.0,
-        )
-
-        # Collect audio bytes from async generator
-        audio_bytes = b""
-        async for chunk in audio_gen:
-            audio_bytes += chunk
-
-        return base64.b64encode(audio_bytes).decode()
-    except Exception:
-        traceback.print_exc()
-        return None
+    image_url = result["images"][0]["url"]
+    return image_url
 
 
 # --- Endpoints ---
 
 @app.post("/api/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
-    """Main endpoint: image in -> video + audio + scene metadata out."""
+    """Proxy image to Modal AR endpoint, return generated video."""
     try:
-        # Run scene analysis and video generation in parallel
-        scene_task = asyncio.create_task(analyze_scene(req.image_base64, req.prompt))
-        video_task = asyncio.create_task(generate_video(req.image_base64, req.prompt))
+        # Step 1: Only convert to 16:9 if the image isn't already 16:9
+        print(f"[generate] Checking aspect ratio...")
+        is_16_9 = _is_16_9(req.image_base64)
+        print(f"[generate] Already 16:9: {is_16_9}")
 
-        # Wait for scene analysis first (it's fast ~2-3s)
-        scene = await scene_task
+        if is_16_9:
+            image_16_9_b64 = req.image_base64
+        else:
+            print(f"[generate] Calling fal.ai nano-banana...")
+            image_url = await asyncio.to_thread(
+                _convert_to_16_9, req.image_base64, req.prompt
+            )
+            print(f"[generate] Got image URL: {image_url[:100]}...")
+            async with httpx.AsyncClient(timeout=120) as client:
+                img_resp = await client.get(image_url)
+                img_resp.raise_for_status()
+                image_16_9_b64 = base64.b64encode(img_resp.content).decode()
+            print(f"[generate] Downloaded converted image, b64 len={len(image_16_9_b64)}")
 
-        # Start soundscape generation using scene keywords (runs while video is still generating)
-        audio_task = asyncio.create_task(generate_soundscape(scene.sound_keywords))
-
-        # Wait for video and audio
-        video_base64, audio_base64 = await asyncio.gather(video_task, audio_task)
-
-        return GenerateResponse(
-            video_base64=video_base64,
-            audio_base64=audio_base64,
-            scene=scene,
-        )
+        # Step 2: Send 16:9 image to Modal lingbot-world for video generation
+        print(f"[generate] Sending to Modal...")
+        async with httpx.AsyncClient(timeout=600, follow_redirects=True) as client:
+            response = await client.post(
+                MODAL_VIDEO_URL,
+                json={
+                    "prompt": req.prompt or "A scene",
+                    "image_base64": image_16_9_b64,
+                    "num_frames": 17,
+                    "pose": req.pose,
+                    "sampling_steps": 40,
+                    "max_area": "720*1280",
+                },
+            )
+            print(f"[generate] Modal response status: {response.status_code}")
+            result = response.json()
+            print(f"[generate] Modal response keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+            if isinstance(result, dict) and "error" in result:
+                print(f"[generate] Modal error: {result['error']}")
+                from fastapi.responses import JSONResponse
+                return JSONResponse(status_code=500, content=result)
+            return result
     except Exception as e:
         traceback.print_exc()
         from fastapi.responses import JSONResponse
@@ -190,7 +137,7 @@ async def generate(req: GenerateRequest):
 
 @app.get("/api/health")
 async def health():
-    """Health check — also pings Modal endpoint."""
+    """Health check — pings Modal endpoint."""
     modal_status = "unknown"
     try:
         async with httpx.AsyncClient(timeout=10) as client:

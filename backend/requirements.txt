@@ -1,6 +1,3 @@
 fastapi
 uvicorn[standard]
 httpx
-anthropic
-elevenlabs
-python-dotenv

@@ -3,20 +3,28 @@ import { useNavigate } from "react-router-dom";
 import WorldMenu from "@/components/WorldMenu";
 import CreationBar from "@/components/CreationBar";
 import WorldCreationTransition from "@/components/WorldCreationTransition";
-import { worlds } from "@/data/worlds";
+import { generateWorld, fileToBase64 } from "@/lib/api";
+import { setPendingGeneration } from "@/lib/generationStore";
 
 const Index = () => {
   const navigate = useNavigate();
   const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreateStart = useCallback(() => {
-    setIsCreating(true);
-  }, []);
+  const handleCreateStart = useCallback(
+    async (file: File | null, prompt: string) => {
+      setIsCreating(true);
+
+      if (file) {
+        const imageBase64 = await fileToBase64(file);
+        const generationPromise = generateWorld(imageBase64, prompt);
+        setPendingGeneration(generationPromise);
+      }
+    },
+    []
+  );
 
   const handleTransitionEnd = useCallback(() => {
-    // Pick a random world to redirect to
-    const randomWorld = worlds[Math.floor(Math.random() * worlds.length)];
-    navigate(randomWorld.link, { state: { fromCreation: true } });
+    navigate("/world/generated", { state: { fromCreation: true } });
   }, [navigate]);
 
   return (
