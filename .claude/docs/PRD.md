@@ -39,13 +39,12 @@ Photos and videos capture moments visually, but they fail to recreate the full s
 | Requirement | Details |
 |---|---|
 | Photo upload | Support common formats (JPEG, PNG, HEIC) |
-| Video upload | Support common formats (MP4, MOV), max 60s |
 | Trigger phrase | Voice or text input: "wish I could go back to that time" (or variations) |
 
 ### 5.2 3D World Generation (HY-1.5-WorldPlay)
 | Requirement | Details |
 |---|---|
-| Scene reconstruction | Generate a navigable 3D environment from a single photo or video |
+| Scene reconstruction | Generate a navigable 3D environment from a single photo |
 | Visual fidelity | Scene should feel recognizable and faithful to the source media |
 | Navigation | Free movement (walk, look around) within the generated world |
 | Memory anchor points | Automatically identify and place 3-5 key points of interest in the scene |

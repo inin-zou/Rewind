@@ -2,6 +2,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { getWorldById } from "@/data/worlds";
 import { useState, useEffect, useRef, useCallback } from "react";
 import VideoPlayer from "@/components/VideoPlayer";
+import AICompanion from "@/components/AICompanion";
 import type { VideoPlayerHandle } from "@/components/VideoPlayer";
 import {
   getPendingGeneration,
@@ -346,6 +347,14 @@ const WorldViewer = () => {
                 </h1>
               </div>
             </div>
+          )}
+
+          {/* AI Companion */}
+          {isGenerated && (
+            <AICompanion
+              sceneContext={generationResult?.prompt || "A memory world"}
+              isActive={!!generationResult && showUI}
+            />
           )}
 
           {/* WASD controls hint - bottom */}
